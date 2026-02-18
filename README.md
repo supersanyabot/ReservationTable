@@ -44,7 +44,7 @@ docker compose down
 docker compose down -v
 ```
 
-## การรันแบบ Local (ไม่ใช้ Docker)
+## Run Local
 
 1. ติดตั้ง .NET 10 SDK และ PostgreSQL
 2. สร้างฐานข้อมูล `reservation_db`
