@@ -1,0 +1,121 @@
+@using ReservationTable.Models
+@model ReservationTable.ViewModels.TableManagementViewModel
+
+@{
+    ViewData["Title"] = "ระบบจัดการโต๊ะ";
+}
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">เพิ่มโต๊ะ</h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="AddTable" method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+                    <div class="mb-3">
+                        <label asp-for="NewZoneCode" class="form-label">ชื่อโซนโต๊ะ</label>
+                        <input asp-for="NewZoneCode" class="form-control" placeholder="เช่น A1, B12, VIP1" />
+                        <span asp-validation-for="NewZoneCode" class="text-danger"></span>
+                    </div>
+                    <p class="small text-muted">เมื่อเพิ่มโต๊ะใหม่ สถานะจะเป็นว่างเสมอ</p>
+                    <button type="submit" class="btn btn-success w-100">เพิ่มโต๊ะ</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">สถานะโต๊ะแบบละเอียด</h5>
+            </div>
+            <div class="card-body">
+                @if (TempData["SuccessMessage"] is string successMessage)
+                {
+                    <div class="alert alert-success">@successMessage</div>
+                }
+                @if (TempData["ErrorMessage"] is string errorMessage)
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>โซน</th>
+                                <th>สถานะ</th>
+                                <th>รายละเอียด</th>
+                                <th>จองล่าสุด</th>
+                                <th class="text-end">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var table in Model.Tables)
+                            {
+                                var latestReservation = table.Reservations.OrderByDescending(r => r.Id).FirstOrDefault();
+                                <tr>
+                                    <td>@table.ZoneCode</td>
+                                    <td>
+                                        <span class="badge @table.Status.ToBadgeCss()">@table.Status.ToDisplayText()</span>
+                                    </td>
+                                    <td class="small">
+                                        <div>@table.Status.ToDetailText()</div>
+                                    </td>
+                                    <td class="small">
+                                        @if (latestReservation is not null)
+                                        {
+                                            <div>Code: @latestReservation.ReservationCode</div>
+                                            <div>@latestReservation.CustomerName</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">ยังไม่มีการจอง</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <form asp-action="UpdateStatus" method="post" class="d-flex flex-column gap-2 mb-2">
+                                            <input type="hidden" name="tableId" value="@table.Id" />
+                                            <select name="status" class="form-select form-select-sm">
+                                                @foreach (var status in Enum.GetValues<TableStatus>())
+                                                {
+                                                    <option value="@((int)status)" selected="@(status == table.Status ? "selected" : null)">
+                                                        @status.ToDisplayText()
+                                                    </option>
+                                                }
+                                            </select>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary">บันทึกสถานะ</button>
+                                        </form>
+
+                                        <form asp-action="CancelReservation" method="post" class="d-flex flex-column gap-2 mb-2">
+                                            <input type="hidden" name="tableId" value="@table.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-warning"
+                                                    onclick="return confirm('ยืนยันยกเลิกการจองของโต๊ะ @table.ZoneCode ?');"
+                                                    disabled="@(table.Reservations.Count == 0 ? "disabled" : null)">
+                                                ยกเลิกการจอง
+                                            </button>
+                                        </form>
+
+                                        <form asp-action="DeleteTable" method="post" class="d-inline">
+                                            <input type="hidden" name="tableId" value="@table.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                    onclick="return confirm('ยืนยันการลบโต๊ะ @table.ZoneCode ?');">
+                                                ลบโต๊ะ
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

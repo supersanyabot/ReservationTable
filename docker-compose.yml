@@ -1,0 +1,47 @@
+services:
+  reservationtable.web:
+    build:
+      context: ./ReservationTable
+      dockerfile: Dockerfile
+    container_name: reservationtable_web
+    depends_on:
+      reservationtable.db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5000
+      ConnectionStrings__DefaultConnection: Host=reservationtable.db;Port=5432;Database=reservation_db;Username=postgres;Password=postgres
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+  reservationtable.db:
+    image: postgres:16
+    container_name: reservationtable_db
+    environment:
+      POSTGRES_DB: reservation_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - reservationtable_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d reservation_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  reservationtable.build:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    container_name: reservationtable_build
+    working_dir: /src
+    command: dotnet build ReservationTable.slnx
+    volumes:
+      - ./:/src
+    profiles:
+      - tools
+
+volumes:
+  reservationtable_pgdata:

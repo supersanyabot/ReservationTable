@@ -1,0 +1,139 @@
+@using ReservationTable.Models
+@model ReservationTable.ViewModels.ReservationPageViewModel
+
+@{
+    ViewData["Title"] = "ระบบจองโต๊ะ";
+    var availableTables = Model.Tables.Where(t => t.Status == TableStatus.Available).ToList();
+}
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">สถานะโต๊ะแบบละเอียด</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    @foreach (var table in Model.Tables)
+                    {
+                        var latestReservation = table.Reservations.OrderByDescending(r => r.Id).FirstOrDefault();
+                        var isAvailable = table.Status == TableStatus.Available;
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100 d-flex flex-column @table.Status.ToTableCardCss()">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="fw-semibold">โต๊ะ @table.ZoneCode</div>
+                                    <span class="badge @table.Status.ToBadgeCss()">@table.Status.ToDisplayText()</span>
+                                </div>
+                                <div class="small mt-1">@table.Status.ToDetailText()</div>
+
+                                @if (latestReservation is not null)
+                                {
+                                    <hr />
+                                    <div class="small">
+                                        <div class="fw-semibold">การจองล่าสุด</div>
+                                        <div>Reservation Code: @latestReservation.ReservationCode</div>
+                                        <div>ผู้จอง: @latestReservation.CustomerName</div>
+                                        <div>เบอร์โทร: @latestReservation.PhoneNumber</div>
+                                    </div>
+                                }
+
+                                <div class="mt-auto pt-3 text-end">
+                                    @if (isAvailable)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-sm btn-primary js-select-table"
+                                                data-table-id="@table.Id"
+                                                data-zone-code="@table.ZoneCode">
+                                            จองโต๊ะนี้
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-secondary" disabled>
+                                            โต๊ะไม่ว่าง
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm" id="reservation-form-card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">จองโต๊ะ</h5>
+            </div>
+            <div class="card-body">
+                @if (TempData["SuccessMessage"] is string successMessage)
+                {
+                    <div class="alert alert-success">@successMessage</div>
+                }
+
+                <form asp-action="Create" method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="ReservationForm.CustomerName" class="form-label">ชื่อผู้จอง</label>
+                        <input asp-for="ReservationForm.CustomerName" class="form-control" />
+                        <span asp-validation-for="ReservationForm.CustomerName" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ReservationForm.PhoneNumber" class="form-label">เบอร์โทร</label>
+                        <input asp-for="ReservationForm.PhoneNumber" class="form-control" placeholder="0XXXXXXXXX" />
+                        <span asp-validation-for="ReservationForm.PhoneNumber" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ReservationForm.RestaurantTableId" class="form-label">โต๊ะที่ว่าง</label>
+                        <select asp-for="ReservationForm.RestaurantTableId" class="form-select" id="reservationTableSelect">
+                            <option value="">-- กรุณาเลือกโต๊ะ --</option>
+                            @foreach (var table in availableTables)
+                            {
+                                <option value="@table.Id">@table.ZoneCode (@table.Status.ToDisplayText())</option>
+                            }
+                        </select>
+                        <span asp-validation-for="ReservationForm.RestaurantTableId" class="text-danger"></span>
+                        <div class="small text-muted mt-1">สีอ่อนจะแสดงที่กล่องโต๊ะด้านซ้าย</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">ยืนยันการจอง</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.querySelectorAll(".js-select-table").forEach(function (button) {
+            button.addEventListener("click", function () {
+                var tableId = this.getAttribute("data-table-id");
+                var zoneCode = this.getAttribute("data-zone-code");
+                var select = document.getElementById("reservationTableSelect");
+                var formCard = document.getElementById("reservation-form-card");
+
+                if (!select) {
+                    return;
+                }
+
+                select.value = tableId;
+                select.dispatchEvent(new Event("change", { bubbles: true }));
+
+                if (formCard) {
+                    formCard.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+
+                var selectedText = document.querySelector("#reservation-form-card .text-muted");
+                if (selectedText) {
+                    selectedText.textContent = "เลือกโต๊ะ: " + zoneCode + " เรียบร้อยแล้ว";
+                }
+            });
+        });
+    </script>
+}
