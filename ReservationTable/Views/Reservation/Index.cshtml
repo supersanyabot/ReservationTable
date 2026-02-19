@@ -1,62 +1,45 @@
-@using ReservationTable.Models
+﻿@using ReservationTable.Models
 @model ReservationTable.ViewModels.ReservationPageViewModel
 
 @{
     ViewData["Title"] = "ระบบจองโต๊ะ";
-    var availableTables = Model.Tables.Where(t => t.Status == TableStatus.Available).ToList();
+    var allTables = Model.Tables.OrderBy(t => t.Zone!.ZoneCode).ThenBy(t => t.TableCode).ToList();
 }
 
 <div class="row g-4">
     <div class="col-lg-8">
         <div class="card shadow-sm">
             <div class="card-header bg-light">
-                <h5 class="mb-0">สถานะโต๊ะแบบละเอียด</h5>
+                <h5 class="mb-0">เลือกโซน</h5>
             </div>
             <div class="card-body">
-                <div class="row g-3">
-                    @foreach (var table in Model.Tables)
+                <div class="row g-3 mb-4">
+                    @foreach (var zone in Model.Zones)
                     {
-                        var latestReservation = table.Reservations.OrderByDescending(r => r.Id).FirstOrDefault();
-                        var isAvailable = table.Status == TableStatus.Available;
+                        var zoneAvailableCount = allTables.Count(t => t.ZoneId == zone.Id && t.Status == TableStatus.Available);
                         <div class="col-md-6">
-                            <div class="border rounded p-3 h-100 d-flex flex-column @table.Status.ToTableCardCss()">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="fw-semibold">โต๊ะ @table.ZoneCode</div>
-                                    <span class="badge @table.Status.ToBadgeCss()">@table.Status.ToDisplayText()</span>
-                                </div>
-                                <div class="small mt-1">@table.Status.ToDetailText()</div>
-
-                                @if (latestReservation is not null)
-                                {
-                                    <hr />
-                                    <div class="small">
-                                        <div class="fw-semibold">การจองล่าสุด</div>
-                                        <div>Reservation Code: @latestReservation.ReservationCode</div>
-                                        <div>ผู้จอง: @latestReservation.CustomerName</div>
-                                        <div>เบอร์โทร: @latestReservation.PhoneNumber</div>
-                                    </div>
-                                }
-
-                                <div class="mt-auto pt-3 text-end">
-                                    @if (isAvailable)
-                                    {
-                                        <button type="button"
-                                                class="btn btn-sm btn-primary js-select-table"
-                                                data-table-id="@table.Id"
-                                                data-zone-code="@table.ZoneCode">
-                                            จองโต๊ะนี้
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <button type="button" class="btn btn-sm btn-secondary" disabled>
-                                            โต๊ะไม่ว่าง
-                                        </button>
-                                    }
+                            <div class="border rounded p-3 h-100 table-card-soft table-card-available">
+                                <div class="fw-semibold">@zone.ZoneCode</div>
+                                <div class="small text-muted mt-1">โต๊ะว่าง: @zoneAvailableCount โต๊ะ</div>
+                                <div class="mt-3 text-end">
+                                    <button type="button"
+                                            class="btn btn-sm btn-primary js-select-zone"
+                                            data-zone-id="@zone.Id"
+                                            data-zone-label="@zone.ZoneCode">
+                                        เลือกโซนนี้
+                                    </button>
                                 </div>
                             </div>
                         </div>
                     }
+                </div>
+
+                <div>
+                    <h6 class="mb-2">โต๊ะทั้งหมดในโซนที่เลือก</h6>
+                    <div id="availableTableList" class="d-flex flex-wrap gap-2">
+                        <span class="text-muted small">กรุณาเลือกโซนก่อน</span>
+                    </div>
+                    <div class="alert alert-warning mt-3 mb-0 d-none" id="reservedTableDetail"></div>
                 </div>
             </div>
         </div>
@@ -89,16 +72,37 @@
                     </div>
 
                     <div class="mb-3">
-                        <label asp-for="ReservationForm.RestaurantTableId" class="form-label">โต๊ะที่ว่าง</label>
-                        <select asp-for="ReservationForm.RestaurantTableId" class="form-select" id="reservationTableSelect">
-                            <option value="">-- กรุณาเลือกโต๊ะ --</option>
-                            @foreach (var table in availableTables)
+                        <label asp-for="ReservationForm.ZoneId" class="form-label">เลือกโซน</label>
+                        <select asp-for="ReservationForm.ZoneId" class="form-select" id="reservationZoneSelect">
+                            <option value="">-- กรุณาเลือกโซน --</option>
+                            @foreach (var zone in Model.Zones)
                             {
-                                <option value="@table.Id">@table.ZoneCode (@table.Status.ToDisplayText())</option>
+                                <option value="@zone.Id">@zone.ZoneCode</option>
+                            }
+                        </select>
+                        <span asp-validation-for="ReservationForm.ZoneId" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ReservationForm.RestaurantTableId" class="form-label">เลือกโต๊ะ</label>
+                        <select asp-for="ReservationForm.RestaurantTableId" class="form-select" id="reservationTableSelect" disabled>
+                            <option value="">-- กรุณาเลือกโต๊ะ --</option>
+                            @foreach (var table in allTables)
+                            {
+                                var latestReservation = table.Reservations.OrderByDescending(r => r.Id).FirstOrDefault();
+                                <option value="@table.Id"
+                                        data-zone-id="@table.ZoneId"
+                                        data-status="@((int)table.Status)"
+                                        data-reservation-code="@(latestReservation?.ReservationCode ?? string.Empty)"
+                                        data-customer-name="@(latestReservation?.CustomerName ?? string.Empty)"
+                                        data-phone-number="@(latestReservation?.PhoneNumber ?? string.Empty)"
+                                        disabled="@(table.Status == TableStatus.Reserved ? "disabled" : null)">
+                                    @table.Zone?.ZoneCode-@table.TableCode
+                                </option>
                             }
                         </select>
                         <span asp-validation-for="ReservationForm.RestaurantTableId" class="text-danger"></span>
-                        <div class="small text-muted mt-1">สีอ่อนจะแสดงที่กล่องโต๊ะด้านซ้าย</div>
+                        <div class="small text-muted mt-1" id="selectedTableText">กรุณาเลือกโซนก่อน แล้วจึงเลือกโต๊ะ</div>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100">ยืนยันการจอง</button>
@@ -111,29 +115,140 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
-        document.querySelectorAll(".js-select-table").forEach(function (button) {
-            button.addEventListener("click", function () {
-                var tableId = this.getAttribute("data-table-id");
-                var zoneCode = this.getAttribute("data-zone-code");
-                var select = document.getElementById("reservationTableSelect");
-                var formCard = document.getElementById("reservation-form-card");
+        (function () {
+            const zoneSelect = document.getElementById("reservationZoneSelect");
+            const tableSelect = document.getElementById("reservationTableSelect");
+            const selectedText = document.getElementById("selectedTableText");
+            const zoneButtons = document.querySelectorAll(".js-select-zone");
+            const tableList = document.getElementById("availableTableList");
+            const reservedTableDetail = document.getElementById("reservedTableDetail");
 
-                if (!select) {
+            function hideReservedDetail() {
+                if (!reservedTableDetail) return;
+                reservedTableDetail.classList.add("d-none");
+                reservedTableDetail.innerHTML = "";
+            }
+
+            function showReservedDetail(option) {
+                if (!reservedTableDetail || !option) return;
+
+                const reservationCode = option.getAttribute("data-reservation-code") || "-";
+                const customerName = option.getAttribute("data-customer-name") || "-";
+                const phoneNumber = option.getAttribute("data-phone-number") || "-";
+
+                reservedTableDetail.innerHTML =
+                    "<strong>รายละเอียดการจอง</strong><br>" +
+                    "โต๊ะ: " + option.textContent.trim() + "<br>" +
+                    "Code: " + reservationCode + "<br>" +
+                    "ผู้จอง: " + customerName + "<br>" +
+                    "เบอร์โทร: " + phoneNumber;
+                reservedTableDetail.classList.remove("d-none");
+            }
+
+            function getVisibleTableOptions(zoneId) {
+                if (!tableSelect) return [];
+                return Array.from(tableSelect.options).filter(function (option, index) {
+                    if (index === 0) return false;
+                    return !zoneId || option.getAttribute("data-zone-id") === zoneId;
+                });
+            }
+
+            function renderTableButtons(zoneId) {
+                if (!tableList || !tableSelect) return;
+
+                tableList.innerHTML = "";
+                if (!zoneId) {
+                    tableList.innerHTML = '<span class="text-muted small">กรุณาเลือกโซนก่อน</span>';
                     return;
                 }
 
-                select.value = tableId;
-                select.dispatchEvent(new Event("change", { bubbles: true }));
-
-                if (formCard) {
-                    formCard.scrollIntoView({ behavior: "smooth", block: "center" });
+                const options = getVisibleTableOptions(zoneId);
+                if (options.length === 0) {
+                    tableList.innerHTML = '<span class="text-muted small">โซนนี้ยังไม่มีโต๊ะ</span>';
+                    return;
                 }
 
-                var selectedText = document.querySelector("#reservation-form-card .text-muted");
-                if (selectedText) {
-                    selectedText.textContent = "เลือกโต๊ะ: " + zoneCode + " เรียบร้อยแล้ว";
+                options.forEach(function (option) {
+                    const isReserved = option.getAttribute("data-status") === "2";
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = isReserved ? "btn btn-sm btn-outline-danger" : "btn btn-sm btn-outline-success";
+                    button.textContent = option.textContent.trim() + (isReserved ? " (จองแล้ว)" : " (ว่าง)");
+                    button.addEventListener("click", function () {
+                        if (isReserved) {
+                            showReservedDetail(option);
+                            return;
+                        }
+
+                        hideReservedDetail();
+                        tableSelect.value = option.value;
+                        tableSelect.dispatchEvent(new Event("change", { bubbles: true }));
+                        if (selectedText) {
+                            selectedText.textContent = "เลือกโต๊ะ: " + option.textContent.trim() + " เรียบร้อยแล้ว";
+                        }
+                    });
+                    tableList.appendChild(button);
+                });
+            }
+
+            function filterTablesByZone(zoneId) {
+                if (!tableSelect) return;
+
+                tableSelect.disabled = !zoneId;
+
+                const currentValue = tableSelect.value;
+                Array.from(tableSelect.options).forEach(function (option, index) {
+                    if (index === 0) {
+                        option.hidden = false;
+                        return;
+                    }
+                    option.hidden = !zoneId || option.getAttribute("data-zone-id") !== zoneId;
+                });
+
+                const selectedOption = tableSelect.options[tableSelect.selectedIndex];
+                if (selectedOption && selectedOption.hidden) {
+                    tableSelect.value = "";
                 }
+
+                if (!zoneId && currentValue) {
+                    tableSelect.value = "";
+                }
+
+                hideReservedDetail();
+                renderTableButtons(zoneId);
+            }
+
+            if (zoneSelect) {
+                filterTablesByZone(zoneSelect.value);
+                zoneSelect.addEventListener("change", function () {
+                    filterTablesByZone(this.value);
+                    if (selectedText) {
+                        selectedText.textContent = this.value
+                            ? "เลือกโซนแล้ว กรุณาเลือกโต๊ะ"
+                            : "กรุณาเลือกโซนก่อน แล้วจึงเลือกโต๊ะ";
+                    }
+                });
+            }
+
+            zoneButtons.forEach(function (button) {
+                button.addEventListener("click", function () {
+                    const zoneId = this.getAttribute("data-zone-id");
+                    const zoneLabel = this.getAttribute("data-zone-label");
+                    const formCard = document.getElementById("reservation-form-card");
+
+                    if (!zoneSelect) return;
+                    zoneSelect.value = zoneId;
+                    zoneSelect.dispatchEvent(new Event("change", { bubbles: true }));
+
+                    if (selectedText) {
+                        selectedText.textContent = "เลือกโซน: " + zoneLabel + " เรียบร้อยแล้ว กรุณาเลือกโต๊ะ";
+                    }
+
+                    if (formCard) {
+                        formCard.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                });
             });
-        });
+        })();
     </script>
 }

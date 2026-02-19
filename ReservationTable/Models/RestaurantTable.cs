@@ -8,7 +8,10 @@ public class RestaurantTable
 
     [Required]
     [MaxLength(10)]
-    public string ZoneCode { get; set; } = string.Empty;
+    public string TableCode { get; set; } = string.Empty;
+
+    public int ZoneId { get; set; }
+    public TableZone? Zone { get; set; }
 
     public TableStatus Status { get; set; } = TableStatus.Available;
 

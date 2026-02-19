@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ReservationTable.Data;
 using ReservationTable.Models;
@@ -10,14 +10,10 @@ public class ReservationController(ApplicationDbContext dbContext) : Controller
 {
     public async Task<IActionResult> Index()
     {
-        var tables = await dbContext.RestaurantTables
-            .Include(t => t.Reservations)
-            .OrderBy(t => t.ZoneCode)
-            .ToListAsync();
-
         var vm = new ReservationPageViewModel
         {
-            Tables = tables
+            Zones = await dbContext.TableZones.OrderBy(z => z.ZoneCode).ToListAsync(),
+            Tables = await LoadTablesAsync()
         };
 
         return View(vm);
@@ -27,10 +23,8 @@ public class ReservationController(ApplicationDbContext dbContext) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(ReservationPageViewModel vm)
     {
-        vm.Tables = await dbContext.RestaurantTables
-            .Include(t => t.Reservations)
-            .OrderBy(t => t.ZoneCode)
-            .ToListAsync();
+        vm.Zones = await dbContext.TableZones.OrderBy(z => z.ZoneCode).ToListAsync();
+        vm.Tables = await LoadTablesAsync();
 
         if (!ModelState.IsValid)
         {
@@ -38,34 +32,49 @@ public class ReservationController(ApplicationDbContext dbContext) : Controller
         }
 
         var tableId = vm.ReservationForm.RestaurantTableId!.Value;
-        var table = await dbContext.RestaurantTables.FirstOrDefaultAsync(t => t.Id == tableId);
-        if (table is null || table.Status != TableStatus.Available)
+        var zoneId = vm.ReservationForm.ZoneId!.Value;
+        var table = await dbContext.RestaurantTables
+            .Include(t => t.Zone)
+            .FirstOrDefaultAsync(t => t.Id == tableId);
+
+        if (table is null || table.Zone is null || table.ZoneId != zoneId || table.Status != TableStatus.Available)
         {
-            ModelState.AddModelError("ReservationForm.RestaurantTableId", "โต๊ะนี้ไม่ว่าง กรุณาเลือกโต๊ะอื่น");
+            ModelState.AddModelError("ReservationForm.RestaurantTableId", "โต๊ะนี้ไม่ว่างหรือไม่ตรงกับโซนที่เลือก");
             return View("Index", vm);
         }
 
-        var reservationCode = await GenerateReservationCodeAsync(table.ZoneCode);
-        var reservation = new Reservation
+        var zoneCode = table.Zone.ZoneCode;
+        var reservationCode = await GenerateReservationCodeAsync(zoneCode);
+
+        dbContext.Reservations.Add(new Reservation
         {
             ReservationCode = reservationCode,
             CustomerName = vm.ReservationForm.CustomerName.Trim(),
             PhoneNumber = vm.ReservationForm.PhoneNumber.Trim(),
             RestaurantTableId = table.Id
-        };
+        });
 
         table.Status = TableStatus.Reserved;
-        dbContext.Reservations.Add(reservation);
         await dbContext.SaveChangesAsync();
 
         TempData["SuccessMessage"] = $"จองสำเร็จ Reservation Code: {reservationCode}";
         return RedirectToAction(nameof(Index));
     }
 
+    private async Task<List<RestaurantTable>> LoadTablesAsync()
+    {
+        return await dbContext.RestaurantTables
+            .Include(t => t.Zone)
+            .Include(t => t.Reservations)
+            .OrderBy(t => t.Zone!.ZoneCode)
+            .ThenBy(t => t.TableCode)
+            .ToListAsync();
+    }
+
     private async Task<string> GenerateReservationCodeAsync(string zoneCode)
     {
         var todayPrefix = DateTime.UtcNow.ToString("ddMM");
-        var prefix = $"{todayPrefix}{zoneCode.ToUpper()}";
+        var prefix = $"{todayPrefix}{zoneCode.Trim().ToUpper()}";
 
         var lastReservationCode = await dbContext.Reservations
             .Where(r => r.ReservationCode.StartsWith(prefix))

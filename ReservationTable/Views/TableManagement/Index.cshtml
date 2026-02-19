@@ -7,20 +7,71 @@
 
 <div class="row g-4">
     <div class="col-lg-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">เพิ่มโซน</h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="AddZone" method="post">
+                    <div class="mb-3">
+                        <label asp-for="AddZoneForm.ZoneCode" class="form-label">รหัสโซน</label>
+                        <input asp-for="AddZoneForm.ZoneCode" class="form-control" placeholder="เช่น A1, B2, VIP55" />
+                        <span asp-validation-for="AddZoneForm.ZoneCode" class="text-danger"></span>
+                    </div><button type="submit" class="btn btn-success w-100">เพิ่มโซน</button>
+                </form>
+            </div>
+        </div>
+
         <div class="card shadow-sm">
             <div class="card-header bg-light">
                 <h5 class="mb-0">เพิ่มโต๊ะ</h5>
             </div>
             <div class="card-body">
                 <form asp-action="AddTable" method="post">
-                    <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
                     <div class="mb-3">
-                        <label asp-for="NewZoneCode" class="form-label">ชื่อโซนโต๊ะ</label>
-                        <input asp-for="NewZoneCode" class="form-control" placeholder="เช่น A1, B12, VIP1" />
-                        <span asp-validation-for="NewZoneCode" class="text-danger"></span>
+                        <label asp-for="AddTableForm.ZoneId" class="form-label">โซน</label>
+                        <select asp-for="AddTableForm.ZoneId" class="form-select">
+                            <option value="">-- เลือกโซน --</option>
+                            @foreach (var zone in Model.Zones)
+                            {
+                                <option value="@zone.Id">@zone.ZoneCode</option>
+                            }
+                        </select>
+                        <span asp-validation-for="AddTableForm.ZoneId" class="text-danger"></span>
                     </div>
-                    <p class="small text-muted">เมื่อเพิ่มโต๊ะใหม่ สถานะจะเป็นว่างเสมอ</p>
-                    <button type="submit" class="btn btn-success w-100">เพิ่มโต๊ะ</button>
+                    <div class="mb-3">
+                        <label asp-for="AddTableForm.TableCode" class="form-label">รหัสโต๊ะ</label>
+                        <input asp-for="AddTableForm.TableCode" class="form-control" placeholder="เช่น 1, 2, 10" />
+                        <span asp-validation-for="AddTableForm.TableCode" class="text-danger"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">เพิ่มโต๊ะ</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">ลบโซน</h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="DeleteZone" method="post">
+                    <div class="mb-3">
+                        <label asp-for="DeleteZoneForm.ZoneId" class="form-label">เลือกโซน</label>
+                        <select asp-for="DeleteZoneForm.ZoneId" class="form-select">
+                            <option value="">-- เลือกโซนที่ต้องการลบ --</option>
+                            @foreach (var zone in Model.Zones)
+                            {
+                                <option value="@zone.Id">@zone.ZoneCode</option>
+                            }
+                        </select>
+                        <span asp-validation-for="DeleteZoneForm.ZoneId" class="text-danger"></span>
+                    </div>
+                    <div class="small text-muted mb-2">ลบได้เฉพาะโซนที่ไม่มีโต๊ะค้างอยู่</div>
+                    <button type="submit"
+                            class="btn btn-outline-danger w-100"
+                            onclick="return confirm('ยืนยันการลบโซนนี้?');">
+                        ลบโซน
+                    </button>
                 </form>
             </div>
         </div>
@@ -29,7 +80,7 @@
     <div class="col-lg-8">
         <div class="card shadow-sm">
             <div class="card-header bg-light">
-                <h5 class="mb-0">สถานะโต๊ะแบบละเอียด</h5>
+                <h5 class="mb-0">สถานะโต๊ะ</h5>
             </div>
             <div class="card-body">
                 @if (TempData["SuccessMessage"] is string successMessage)
@@ -41,44 +92,64 @@
                     <div class="alert alert-danger">@errorMessage</div>
                 }
 
+                <div class="row g-2 mb-3">
+                    <div class="col-md-5 col-lg-4">
+                        <label for="zoneFilter" class="form-label mb-1">Filter by zone</label>
+                        <select id="zoneFilter" class="form-select form-select-sm">
+                            <option value="">All zones</option>
+                            @foreach (var zone in Model.Zones)
+                            {
+                                <option value="@zone.Id">@zone.ZoneCode</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table class="table table-striped align-middle">
                         <thead>
                             <tr>
                                 <th>โซน</th>
+                                <th>โต๊ะ</th>
                                 <th>สถานะ</th>
-                                <th>รายละเอียด</th>
                                 <th>จองล่าสุด</th>
-                                <th class="text-end">จัดการ</th>
+                                <th style="min-width: 180px;">Update status</th>
+                                <th style="width: 110px;">Cancel</th>
+                                <th style="width: 90px;">Delete</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="tableManagementBody">
                             @foreach (var table in Model.Tables)
                             {
                                 var latestReservation = table.Reservations.OrderByDescending(r => r.Id).FirstOrDefault();
-                                <tr>
-                                    <td>@table.ZoneCode</td>
+                                var tableLabel = $"{table.Zone?.ZoneCode}-{table.TableCode}";
+
+                                <tr data-zone-id="@table.ZoneId">
+                                    <td>
+                                        <div class="fw-semibold">@table.Zone?.ZoneCode</div></td>
+                                    <td class="fw-semibold">@tableLabel</td>
                                     <td>
                                         <span class="badge @table.Status.ToBadgeCss()">@table.Status.ToDisplayText()</span>
-                                    </td>
-                                    <td class="small">
-                                        <div>@table.Status.ToDetailText()</div>
                                     </td>
                                     <td class="small">
                                         @if (latestReservation is not null)
                                         {
                                             <div>Code: @latestReservation.ReservationCode</div>
-                                            <div>@latestReservation.CustomerName</div>
+                                            <div>@latestReservation.CustomerName, @latestReservation.PhoneNumber</div>
                                         }
                                         else
                                         {
                                             <span class="text-muted">ยังไม่มีการจอง</span>
                                         }
                                     </td>
-                                    <td class="text-end">
-                                        <form asp-action="UpdateStatus" method="post" class="d-flex flex-column gap-2 mb-2">
+                                    <td>
+                                        <form asp-action="UpdateStatus"
+                                              method="post"
+                                              class="d-flex gap-2 js-update-status-form"
+                                              data-table-label="@tableLabel"
+                                              data-current-status="@((int)table.Status)">
                                             <input type="hidden" name="tableId" value="@table.Id" />
-                                            <select name="status" class="form-select form-select-sm">
+                                            <select name="status" class="form-select form-select-sm w-50">
                                                 @foreach (var status in Enum.GetValues<TableStatus>())
                                                 {
                                                     <option value="@((int)status)" selected="@(status == table.Status ? "selected" : null)">
@@ -86,23 +157,27 @@
                                                     </option>
                                                 }
                                             </select>
-                                            <button type="submit" class="btn btn-sm btn-outline-primary">บันทึกสถานะ</button>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary w-50">บันทึกสถานะ</button>
                                         </form>
-
-                                        <form asp-action="CancelReservation" method="post" class="d-flex flex-column gap-2 mb-2">
+                                    </td>
+                                    <td>
+                                        <form asp-action="CancelReservation" method="post" class="d-grid">
                                             <input type="hidden" name="tableId" value="@table.Id" />
-                                            <button type="submit" class="btn btn-sm btn-outline-warning"
-                                                    onclick="return confirm('ยืนยันยกเลิกการจองของโต๊ะ @table.ZoneCode ?');"
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-warning"
+                                                    onclick="return confirm('ยืนยันยกเลิกการจองของโต๊ะ @tableLabel ?');"
                                                     disabled="@(table.Reservations.Count == 0 ? "disabled" : null)">
-                                                ยกเลิกการจอง
+                                                ยกเลิก
                                             </button>
                                         </form>
-
-                                        <form asp-action="DeleteTable" method="post" class="d-inline">
+                                    </td>
+                                    <td>
+                                        <form asp-action="DeleteTable" method="post" class="d-grid">
                                             <input type="hidden" name="tableId" value="@table.Id" />
-                                            <button type="submit" class="btn btn-sm btn-outline-danger"
-                                                    onclick="return confirm('ยืนยันการลบโต๊ะ @table.ZoneCode ?');">
-                                                ลบโต๊ะ
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                    onclick="return confirm('ยืนยันการลบโต๊ะ @tableLabel ?');">
+                                                ลบ
                                             </button>
                                         </form>
                                     </td>
@@ -116,6 +191,96 @@
     </div>
 </div>
 
+<div class="modal fade" id="reserveInfoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">กรอกข้อมูลการจอง</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="UpdateStatus" method="post" id="reserveInfoForm">
+                <div class="modal-body">
+                    <p class="small text-muted mb-3" id="reserveTableLabelText"></p>
+                    <input type="hidden" name="tableId" id="reserveTableId" />
+                    <input type="hidden" name="status" id="reserveStatusValue" />
+
+                    <div class="mb-3">
+                        <label class="form-label">ชื่อผู้จอง</label>
+                        <input type="text" name="customerName" id="reserveCustomerName" class="form-control" required />
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label">เบอร์โทร</label>
+                        <input type="text" name="phoneNumber" id="reservePhoneNumber" class="form-control" placeholder="0XXXXXXXXX" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-primary">ยืนยันบันทึก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const filter = document.getElementById("zoneFilter");
+            const rows = document.querySelectorAll("#tableManagementBody tr");
+            const updateForms = document.querySelectorAll(".js-update-status-form");
+            const reserveStatus = "2";
+            const availableStatus = "1";
+            const modalEl = document.getElementById("reserveInfoModal");
+            const reserveModal = modalEl ? new bootstrap.Modal(modalEl) : null;
+            const zoneFilterStorageKey = "tableManagement.selectedZoneId";
+
+            function applyZoneFilter(zoneId) {
+                rows.forEach(function (row) {
+                    const rowZoneId = row.getAttribute("data-zone-id");
+                    row.style.display = !zoneId || rowZoneId === zoneId ? "" : "none";
+                });
+            }
+
+            if (filter) {
+                const savedZoneId = localStorage.getItem(zoneFilterStorageKey);
+                const hasSavedOption = savedZoneId
+                    && Array.from(filter.options).some(function (option) { return option.value === savedZoneId; });
+
+                if (hasSavedOption) {
+                    filter.value = savedZoneId;
+                } else {
+                    localStorage.removeItem(zoneFilterStorageKey);
+                }
+
+                applyZoneFilter(filter.value);
+
+                filter.addEventListener("change", function () {
+                    const zoneId = this.value;
+                    applyZoneFilter(zoneId);
+                    localStorage.setItem(zoneFilterStorageKey, zoneId);
+                });
+            }
+
+            updateForms.forEach(function (form) {
+                form.addEventListener("submit", function (e) {
+                    const currentStatus = form.getAttribute("data-current-status");
+                    const statusSelect = form.querySelector("select[name='status']");
+                    const tableIdInput = form.querySelector("input[name='tableId']");
+                    const tableLabel = form.getAttribute("data-table-label");
+                    const nextStatus = statusSelect ? statusSelect.value : "";
+
+                    if (currentStatus === availableStatus && nextStatus === reserveStatus && reserveModal) {
+                        e.preventDefault();
+                        document.getElementById("reserveTableId").value = tableIdInput ? tableIdInput.value : "";
+                        document.getElementById("reserveStatusValue").value = nextStatus;
+                        document.getElementById("reserveTableLabelText").textContent = "โต๊ะ: " + tableLabel;
+                        document.getElementById("reserveCustomerName").value = "";
+                        document.getElementById("reservePhoneNumber").value = "";
+                        reserveModal.show();
+                    }
+                });
+            });
+        })();
+    </script>
 }

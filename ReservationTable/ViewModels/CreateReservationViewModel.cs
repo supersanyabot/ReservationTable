@@ -13,6 +13,9 @@ public class CreateReservationViewModel
     [RegularExpression(@"^0\d{9}$", ErrorMessage = "เบอร์โทรต้องเป็นตัวเลข 10 หลักและขึ้นต้นด้วย 0")]
     public string PhoneNumber { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "กรุณาเลือกโซนโต๊ะ")]
+    [Required(ErrorMessage = "กรุณาเลือกโซน")]
+    public int? ZoneId { get; set; }
+
+    [Required(ErrorMessage = "กรุณาเลือกโต๊ะ")]
     public int? RestaurantTableId { get; set; }
 }
